@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Support\Email;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ class CreateAdmin extends Command
     {
         $data = [
             'name' => $this->option('name') ?? $this->ask('Ім’я'),
-            'email' => $this->option('email') ?? $this->ask('Email'),
+            'email' => Email::normalize($this->option('email') ?? $this->ask('Email')),
         ];
 
         $validator = Validator::make($data, [
@@ -34,7 +35,7 @@ class CreateAdmin extends Command
         }
 
         $data['password'] = $this->secret('Пароль (щонайменше 12 символів)');
-        $validator = Validator::make($data, ['password' => ['required', 'string', Password::min(12)]]);
+        $validator = Validator::make($data, ['password' => ['required', 'string', Password::defaults()]]);
 
         if ($validator->fails()) {
             $this->error($validator->errors()->first());
