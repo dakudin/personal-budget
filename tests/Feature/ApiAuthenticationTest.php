@@ -5,6 +5,7 @@ use App\Actions\Auth\ReplacePassword;
 use App\Models\User;
 use App\Notifications\ResetPasswordToken;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,18 +17,9 @@ use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 
 beforeEach(function () {
+    /** @var \Tests\TestCase $this */
     $this->seed(RoleSeeder::class);
 });
-
-function authHttp(string $method, string $uri, array $data = [], ?string $token = null): TestResponse
-{
-    // Rebuild guards between HTTP requests, as a fresh application would do.
-    Auth::forgetGuards();
-    Auth::shouldUse('web');
-    app()->forgetInstance('auth.driver');
-
-    return test()->json($method, $uri, $data, $token ? ['Authorization' => 'Bearer '.$token] : []);
-}
 
 function registrationData(array $overrides = []): array
 {
@@ -37,12 +29,6 @@ function registrationData(array $overrides = []): array
         'password' => 'initial-password-123',
         'password_confirmation' => 'initial-password-123',
     ], $overrides);
-}
-
-function loginToken(User $user, string $password = 'initial-password-123'): string
-{
-    return authHttp('POST', '/api/v1/auth/login', ['email' => $user->email, 'password' => $password])
-        ->assertOk()->json('token');
 }
 
 function resetCredentials(User $user): array
@@ -77,12 +63,14 @@ it('registers a normalized user without trusting privileged fields', function ()
         ->and(PersonalAccessToken::findToken($response->json('token'))->token)->not->toBe($response->json('token'));
 
     authHttp('GET', '/api/v1/me', token: $response->json('token'))->assertOk()->assertJsonPath('data.id', $user->id);
+    /** @var \Tests\TestCase $this */
     $this->actingAs($user, 'web')->get('/admin')->assertForbidden();
 });
 
 it('validates registration', function (array $overrides, string $field) {
     authHttp('POST', '/api/v1/auth/register', registrationData($overrides))
         ->assertUnprocessable()->assertJsonValidationErrors($field);
+    /** @var \Tests\TestCase $this */
     $this->assertDatabaseCount('users', 0);
     $this->assertDatabaseCount('personal_access_tokens', 0);
 })->with([
@@ -98,10 +86,12 @@ it('rejects an existing email after normalization', function () {
     User::factory()->create(['email' => 'api@example.com']);
     authHttp('POST', '/api/v1/auth/register', registrationData(['email' => ' API@EXAMPLE.COM ']))
         ->assertUnprocessable()->assertJsonValidationErrors('email');
+    /** @var \Tests\TestCase $this */
     $this->assertDatabaseCount('users', 1);
 });
 
 it('rolls back registration and role assignment if token issuance fails', function () {
+    /** @var \Tests\TestCase $this */
     $this->mock(IssueApiToken::class)->shouldReceive('handle')->once()->andThrow(new RuntimeException('Token issuance failed.'));
     authHttp('POST', '/api/v1/auth/register', registrationData())->assertStatus(500);
     $this->assertDatabaseCount('users', 0);
@@ -111,6 +101,7 @@ it('rolls back registration and role assignment if token issuance fails', functi
 
 it('logs in with normalized email and a configurable expiration', function () {
     config(['sanctum.token_lifetime_minutes' => 90]);
+    /** @var \Tests\TestCase $this */
     $this->freezeTime();
     $user = User::factory()->create(['email' => 'api@example.com', 'password' => 'initial-password-123']);
     $response = authHttp('POST', '/api/v1/auth/login', ['email' => ' API@Example.COM ', 'password' => 'initial-password-123'])
@@ -129,10 +120,12 @@ it('returns the same unauthorized response for unknown email and incorrect passw
     $unknown = authHttp('POST', '/api/v1/auth/login', ['email' => 'unknown@example.com', 'password' => 'wrong-password'])
         ->assertUnauthorized()->json();
     expect($unknown)->toBe($incorrect);
+    /** @var \Tests\TestCase $this */
     $this->assertDatabaseCount('personal_access_tokens', 0);
 });
 
 it('requires a valid bearer token on protected endpoints even without an accept header', function (string $method, string $uri) {
+    /** @var \Tests\TestCase $this */
     $this->call($method, $uri)->assertUnauthorized()->assertHeader('Content-Type', 'application/json');
 })->with([
     ['GET', '/api/v1/me'],
@@ -156,6 +149,7 @@ it('rejects invalid expired and revoked bearer tokens over HTTP', function (stri
 
 it('does not accept an admin web session as API authentication', function () {
     $admin = User::factory()->create()->assignRole('admin');
+    /** @var \Tests\TestCase $this */
     $this->actingAs($admin, 'web')->getJson('/api/v1/me')->assertUnauthorized();
     $this->actingAs($admin, 'web')->get('/admin')->assertOk();
 });
@@ -227,6 +221,7 @@ it('uses the configured default broker expiration in both the email and token ve
     $notification = Notification::sent($user, ResetPasswordToken::class)->sole();
     expect($notification->expiresInMinutes)->toBe(17)
         ->and((string) $notification->toMail($user)->render())->toContain('Токен діє 17 хвилин');
+    /** @var \Tests\TestCase $this */
     $this->travel(18)->minutes();
     authHttp('POST', '/api/v1/auth/reset-password', [
         'email' => $user->email,
@@ -285,6 +280,7 @@ it('replaces the password and invalidates only the affected user credentials', f
     expect(Hash::check($data['password'], $user->fresh()->password))->toBeTrue()
         ->and($user->fresh()->remember_token)->not->toBe('previous-remember-token')
         ->and(Password::tokenExists($user->fresh(), $data['token']))->toBeFalse();
+    /** @var \Tests\TestCase $this */
     $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
     $this->assertDatabaseHas('sessions', ['user_id' => $other->id]);
     authHttp('GET', '/api/v1/me', token: $first)->assertUnauthorized();
@@ -330,6 +326,7 @@ it('limits login by normalized email plus IP and releases it after Retry-After',
     $response = authHttp('POST', '/api/v1/auth/login', ['email' => 'api@example.com', 'password' => 'incorrect'])
         ->assertStatus(429)->assertHeader('Retry-After');
     expect((int) $response->headers->get('Retry-After'))->toBeGreaterThan(0);
+    /** @var \Tests\TestCase $this */
     $this->travel(61)->seconds();
     authHttp('POST', '/api/v1/auth/login', ['email' => 'api@example.com', 'password' => 'incorrect'])->assertUnauthorized();
 });
@@ -353,6 +350,7 @@ it('does not expose public web reset routes', function (string $method, string $
     expect(Route::has('password.reset'))->toBeFalse()
         ->and(Route::has('password.update'))->toBeFalse()
         ->and(Route::has('password.reset.success'))->toBeFalse();
+    /** @var \Tests\TestCase $this */
     $this->call($method, $path)->assertNotFound();
 })->with([
     ['GET', '/reset-password/example-token'],
@@ -363,12 +361,14 @@ it('does not expose public web reset routes', function (string $method, string $
 
 function adminSession(User $user): string
 {
+    /** @var SessionGuard $guard */
+    $guard = Auth::guard('web');
     $id = Str::random(40);
     DB::table('sessions')->insert([
         'id' => $id,
         'user_id' => $user->id,
         'payload' => base64_encode(json_encode([
-            Auth::guard('web')->getName() => $user->id,
+            $guard->getName() => $user->id,
             'password_hash_web' => $user->password,
             '_token' => Str::random(40),
         ])),
@@ -419,6 +419,7 @@ it('rolls back password and credential revocation on a transaction failure', fun
     $token = loginToken($user);
     $data = resetCredentials($user);
     DB::table('sessions')->insert(['id' => Str::random(40), 'user_id' => $user->id, 'payload' => '', 'last_activity' => time()]);
+    /** @var \Tests\TestCase $this */
     $this->mock(ReplacePassword::class)->shouldReceive('handle')->once()->andReturnUsing(function (User $user, string $password) {
         (new ReplacePassword)->handle($user, $password);
         throw new RuntimeException('Simulated failure after credential revocation.');

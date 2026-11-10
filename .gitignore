@@ -29,6 +29,7 @@
 /storage/pail
 /vendor
 /docs
+/scripts
 _ide_helper.php
 AGENTS.md
 CLAUDE.md

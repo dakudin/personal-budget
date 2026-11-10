@@ -2,10 +2,10 @@
 
 use Dedoc\Scramble\Generator;
 
-it('documents all seven authentication endpoints and their security requirements', function () {
+it('documents authentication endpoints and their security requirements', function () {
     $document = app(Generator::class)();
 
-    expect($document['paths'])->toHaveCount(7)
+    expect($document['paths'])->toHaveCount(10)
         ->and($document['components']['securitySchemes']['bearerAuth'])->toMatchArray(['type' => 'http', 'scheme' => 'bearer'])
         ->and($document['security'])->toBe([['bearerAuth' => []]]);
 
@@ -34,4 +34,35 @@ it('documents all seven authentication endpoints and their security requirements
         ->and($schemas['ChangePasswordRequest']['required'])->toContain('current_password', 'password', 'password_confirmation')
         ->and($schemas['AuthTokenResource']['required'])->toContain('user', 'token', 'token_type', 'expires_at')
         ->and($schemas['UserResource']['properties'])->not->toHaveKeys(['password', 'remember_token']);
+});
+
+it('documents financial endpoints filters resources and errors', function () {
+    $document = app(Generator::class)();
+    $paths = $document['paths'];
+    expect($paths['/v1/categories']['get']['tags'])->toBe(['Категорії']);
+    $categoryParameters = collect($paths['/v1/categories']['get']['parameters'])->keyBy('name');
+    expect($categoryParameters['include_inactive']['schema']['type'])->toBe('boolean')
+        ->and($categoryParameters['include_inactive']['schema']['default'])->toBeFalse();
+    $parameters = collect($paths['/v1/transactions']['get']['parameters'])->keyBy('name');
+    expect($parameters->keys()->all())->toContain('date_from', 'date_to', 'type', 'category_id', 'per_page', 'page')
+        ->and($parameters['per_page']['schema'])->toMatchArray(['minimum' => 1, 'maximum' => 100, 'default' => 20]);
+    foreach ([['/v1/categories', 'get', 200], ['/v1/transactions', 'get', 200], ['/v1/transactions', 'post', 201], ['/v1/transactions/{transaction}', 'get', 200], ['/v1/transactions/{transaction}', 'patch', 200], ['/v1/transactions/{transaction}', 'delete', 204]] as [$path, $method, $status]) {
+        $operation = $paths[$path][$method];
+        expect($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]])
+            ->and($operation['responses'])->toHaveKeys([$status, 401, 403]);
+        if (str_contains($path, '{transaction}')) {
+            expect($operation['responses'])->toHaveKey(404);
+        }
+        if (! in_array($method, ['get', 'delete']) || ! str_contains($path, '{transaction}')) {
+            expect($operation['responses'])->toHaveKey(422);
+        }
+    }
+    $schemas = $document['components']['schemas'];
+    expect($schemas['StoreTransactionRequest']['properties']['amount_minor'])->toMatchArray(['type' => 'integer', 'minimum' => 1, 'maximum' => 999999999999])
+        ->and($schemas['StoreTransactionRequest']['required'])->toContain('type', 'amount_minor', 'occurred_on')
+        ->and($schemas['UpdateTransactionRequest']['required'] ?? [])->toBe([])
+        ->and($schemas['TransactionResource']['properties']['currency']['const'])->toBe('UAH')
+        ->and($schemas['TransactionResource']['properties']['occurred_on']['format'])->toBe('date')
+        ->and($schemas['TransactionResource']['properties'])->toHaveKeys(['amount_minor', 'category'])
+        ->and($schemas['CategoryResource']['properties'])->toHaveKeys(['id', 'name', 'is_active']);
 });
