@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 beforeEach(function () {
+    /** @var \Tests\TestCase $this */
     $this->seed(RoleSeeder::class);
     Filament::setCurrentPanel(Filament::getPanel('admin'));
 });
@@ -18,16 +19,19 @@ it('uses the isolated MySQL test database', function () {
 });
 
 it('serves the home page and health endpoint', function () {
+    /** @var \Tests\TestCase $this */
     $this->get('/')->assertOk();
     $this->get('/up')->assertOk();
 });
 
 it('redirects guests to admin login', function () {
+    /** @var \Tests\TestCase $this */
     $this->get('/admin')->assertRedirect('/admin/login');
     $this->get('/admin/login')->assertOk();
 });
 
 it('does not expose public registration', function () {
+    /** @var \Tests\TestCase $this */
     $this->get('/admin/register')->assertNotFound();
     $this->post('/admin/register')->assertNotFound();
     $this->get('/register')->assertNotFound();
@@ -35,6 +39,7 @@ it('does not expose public registration', function () {
 });
 
 it('forbids panel access without the admin role', function (bool $assignUserRole) {
+    /** @var \Tests\TestCase $this */
     $user = User::factory()->create();
 
     if ($assignUserRole) {
@@ -45,12 +50,14 @@ it('forbids panel access without the admin role', function (bool $assignUserRole
 })->with([true, false]);
 
 it('allows admins to access the panel', function () {
+    /** @var \Tests\TestCase $this */
     $admin = User::factory()->create()->assignRole('admin');
 
     $this->actingAs($admin)->get('/admin')->assertOk();
 });
 
 it('rejects a user role at login', function () {
+    /** @var \Tests\TestCase $this */
     $user = User::factory()->create()->assignRole('user');
 
     Livewire::test(Login::class)
@@ -62,6 +69,7 @@ it('rejects a user role at login', function () {
 });
 
 it('authenticates an admin', function () {
+    /** @var \Tests\TestCase $this */
     $admin = User::factory()->create()->assignRole('admin');
 
     Livewire::test(Login::class)
@@ -74,6 +82,7 @@ it('authenticates an admin', function () {
 });
 
 it('seeds roles repeatedly without duplicate roles or demo accounts', function () {
+    /** @var \Tests\TestCase $this */
     $this->seed();
     $this->seed();
 

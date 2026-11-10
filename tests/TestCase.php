@@ -2,12 +2,19 @@
 
 namespace Tests;
 
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use LogicException;
 
 abstract class TestCase extends BaseTestCase
 {
+    public User $admin;
+
+    public User $owner;
+
+    public string $bearer;
+
     public function createApplication(): Application
     {
         $app = parent::createApplication();

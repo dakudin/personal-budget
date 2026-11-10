@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 beforeEach(function () {
+    /** @var \Tests\TestCase $this */
     $this->seed(RoleSeeder::class);
     $this->owner = User::factory()->create()->assignRole('user');
     $this->bearer = $this->owner->createToken('m3-test')->plainTextToken;
