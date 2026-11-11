@@ -6,11 +6,17 @@ use App\Models\User;
 use App\Notifications\ResetPasswordToken;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Auth\SessionGuard;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -190,6 +196,73 @@ it('sends a reset notification while keeping known unknown and throttled respons
         return true;
     });
 });
+
+it('queues the standard encrypted mail notification without sending mail in the request', function () {
+    Queue::fake();
+    Mail::fake();
+    $user = User::factory()->create();
+
+    authHttp('POST', '/api/v1/auth/forgot-password', ['email' => $user->email])->assertStatus(202);
+
+    Queue::assertPushedOn('mail', SendQueuedNotifications::class, function (SendQueuedNotifications $job) use ($user) {
+        $notification = $job->notification;
+
+        if (! $notification instanceof ResetPasswordToken) {
+            return false;
+        }
+
+        expect($notification instanceof ShouldQueue)->toBeTrue()
+            ->and($notification instanceof ShouldBeEncrypted)->toBeTrue()
+            ->and($job->shouldBeEncrypted)->toBeTrue()
+            ->and($job->afterCommit)->toBeTrue()
+            ->and($job->channels)->toBe(['mail'])
+            ->and($job->notifiables->sole()->is($user))->toBeTrue()
+            ->and(Password::tokenExists($user, $notification->token))->toBeTrue();
+
+        return true;
+    });
+    Queue::assertPushed(SendQueuedNotifications::class, 1);
+    Mail::assertNothingSent();
+});
+
+it('publishes an encrypted reset job only after commit and discards it on rollback', function (bool $commit) {
+    config(['queue.default' => 'database']);
+    Mail::fake();
+    $user = User::factory()->create();
+
+    DB::beginTransaction();
+    authHttp('POST', '/api/v1/auth/forgot-password', ['email' => $user->email])->assertStatus(202);
+    expect(DB::table('jobs')->count())->toBe(0);
+
+    if (! $commit) {
+        DB::rollBack();
+        expect(DB::table('jobs')->count())->toBe(0)
+            ->and(DB::table('password_reset_tokens')->where('email', $user->email)->exists())->toBeFalse();
+
+        return;
+    }
+
+    DB::commit();
+    $record = DB::table('jobs')->sole();
+    $payload = json_decode($record->payload, true, flags: JSON_THROW_ON_ERROR);
+    $job = unserialize(Crypt::decrypt($payload['data']['command']));
+
+    if (! $job instanceof SendQueuedNotifications) {
+        $this->fail('Expected the standard queued notification job.');
+    }
+
+    $notification = $job->notification;
+
+    if (! $notification instanceof ResetPasswordToken) {
+        $this->fail('Expected a reset password notification.');
+    }
+
+    expect($record->queue)->toBe('mail')
+        ->and($payload['data']['commandName'])->toBe(SendQueuedNotifications::class)
+        ->and(str_contains($record->payload, $notification->token))->toBeFalse()
+        ->and(Password::tokenExists($user, $notification->token))->toBeTrue();
+    Mail::assertNothingSent();
+})->with(['commit' => true, 'rollback' => false]);
 
 it('resets over the public API using the original broker token from the email notification', function () {
     Notification::fake();

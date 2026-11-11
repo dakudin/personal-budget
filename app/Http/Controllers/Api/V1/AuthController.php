@@ -59,7 +59,7 @@ class AuthController extends Controller
     }
 
     /** @unauthenticated */
-    #[Endpoint(title: 'Запит відновлення пароля', description: 'Доступний без Bearer-токена. Для валідного email повертає нейтральну відповідь 202 незалежно від наявності акаунта. Reset-токен надходить лише в тексті листа разом зі строком дії з конфігурації password broker; відповідь API його не містить. Лист надсилається через SMTP; локально — Mailpit. Повторний лист: не частіше разу на 60 секунд за замовчуванням.')]
+    #[Endpoint(title: 'Запит відновлення пароля', description: 'Доступний без Bearer-токена. Для валідного email повертає нейтральну відповідь 202 незалежно від наявності акаунта. Reset-токен надходить лише в тексті листа разом зі строком дії з конфігурації password broker; відповідь API його не містить. Лист надсилає воркер Redis-черги mail через SMTP; локально — Mailpit. Повторний лист: не частіше разу на 60 секунд за замовчуванням.')]
     #[ApiResponse(429, description: 'Спільний ліміт відновлення: 5 запитів за хвилину з IP. Retry-After — секунди очікування.', type: 'array{message: string}')]
     public function forgotPassword(EmailRequest $request): JsonResponse
     {
