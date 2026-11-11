@@ -13,7 +13,7 @@ class RoleSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = ['categories.view', 'transactions.view', 'transactions.create', 'transactions.update', 'transactions.delete'];
+        $permissions = ['categories.view', 'transactions.view', 'transactions.create', 'transactions.update', 'transactions.delete', 'budgets.view', 'budgets.manage'];
 
         foreach ([...$permissions, 'categories.manage'] as $permission) {
             Permission::findOrCreate($permission, 'web');

@@ -7,9 +7,10 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Tests\TestCase;
 
 beforeEach(function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->seed(RoleSeeder::class);
     $this->owner = User::factory()->create()->assignRole('user');
     $this->bearer = $this->owner->createToken('m3-test')->plainTextToken;
@@ -26,6 +27,7 @@ function transactionData(array $overrides = []): array
 }
 
 it('creates reads updates and deletes own income and expense with bearer authentication', function (string $type) {
+    /** @var TestCase $this */
     $category = Category::factory()->create();
     $response = authHttp('POST', '/api/v1/transactions', transactionData([
         'type' => $type,
@@ -45,6 +47,7 @@ it('creates reads updates and deletes own income and expense with bearer authent
 })->with(['income', 'expense']);
 
 it('hides foreign records from users and admins for every endpoint', function (string $role) {
+    /** @var TestCase $this */
     $this->owner->syncRoles($role);
     $foreign = Transaction::factory()->expense()->create();
     $own = Transaction::factory()->for($this->owner)->create();
@@ -62,6 +65,7 @@ it('hides foreign records from users and admins for every endpoint', function (s
 })->with(['user', 'admin']);
 
 it('requires bearer tokens on every financial endpoint', function () {
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->for($this->owner)->create();
     foreach ([['GET', 'categories'], ['GET', 'transactions'], ['POST', 'transactions'], ['GET', 'transactions/'.$transaction->id], ['PATCH', 'transactions/'.$transaction->id], ['DELETE', 'transactions/'.$transaction->id]] as [$method, $uri]) {
         authHttp($method, '/api/v1/'.$uri)->assertUnauthorized();
@@ -69,6 +73,7 @@ it('requires bearer tokens on every financial endpoint', function () {
 });
 
 it('denies each API operation without its permission', function (string $permission, string $method, string $path) {
+    /** @var TestCase $this */
     $this->owner->removeRole('user');
     $transaction = Transaction::factory()->for($this->owner)->create();
     authHttp($method, '/api/v1/'.str_replace('{id}', $transaction->id, $path), transactionData(), $this->bearer)->assertForbidden();
@@ -84,6 +89,7 @@ it('denies each API operation without its permission', function (string $permiss
 ]);
 
 it('lists active categories and validates the inactive flag', function () {
+    /** @var TestCase $this */
     $active = Category::factory()->create();
     $inactive = Category::factory()->inactive()->create();
     authHttp('GET', '/api/v1/categories', token: $this->bearer)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $active->id);
@@ -97,6 +103,7 @@ it('lists active categories and validates the inactive flag', function () {
 });
 
 it('filters inclusively and sorts by date then id with stable pagination', function () {
+    /** @var TestCase $this */
     $category = Category::factory()->create();
     $older = Transaction::factory()->expense()->for($this->owner)->create(['category_id' => $category->id, 'occurred_on' => '2026-11-01']);
     $first = Transaction::factory()->expense()->for($this->owner)->create(['category_id' => $category->id, 'occurred_on' => '2026-11-10']);
@@ -111,12 +118,14 @@ it('filters inclusively and sorts by date then id with stable pagination', funct
 });
 
 it('defaults to twenty records and supports at most one hundred', function () {
+    /** @var TestCase $this */
     Transaction::factory()->count(101)->for($this->owner)->create();
     authHttp('GET', '/api/v1/transactions', token: $this->bearer)->assertOk()->assertJsonCount(20, 'data')->assertJsonPath('meta.total', 101);
     authHttp('GET', '/api/v1/transactions?per_page=100', token: $this->bearer)->assertOk()->assertJsonCount(100, 'data');
 });
 
 it('validates transaction list filters', function (string $query, string $field) {
+    /** @var TestCase $this */
     authHttp('GET', '/api/v1/transactions?'.$query, token: $this->bearer)->assertUnprocessable()->assertJsonValidationErrors($field);
 })->with([
     ['date_from=2026-02-30', 'date_from'], ['date_to=10-11-2026', 'date_to'],
@@ -126,6 +135,7 @@ it('validates transaction list filters', function (string $query, string $field)
 ]);
 
 it('validates amounts dates and descriptions on create and patch', function (array $data, string $field) {
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->for($this->owner)->create();
     authHttp('POST', '/api/v1/transactions', transactionData($data), $this->bearer)->assertUnprocessable()->assertJsonValidationErrors($field);
     authHttp('PATCH', '/api/v1/transactions/'.$transaction->id, $data, $this->bearer)->assertUnprocessable()->assertJsonValidationErrors($field);
@@ -142,6 +152,7 @@ it('validates amounts dates and descriptions on create and patch', function (arr
 ]);
 
 it('requires fields for creation and accepts an empty patch', function () {
+    /** @var TestCase $this */
     authHttp('POST', '/api/v1/transactions', [], $this->bearer)->assertUnprocessable()->assertJsonValidationErrors(['type', 'amount_minor', 'occurred_on']);
     $transaction = Transaction::factory()->for($this->owner)->create();
     authHttp('PATCH', '/api/v1/transactions/'.$transaction->id, [], $this->bearer)->assertOk();
@@ -150,6 +161,7 @@ it('requires fields for creation and accepts an empty patch', function () {
 it('requires an active category for new expenses and no category for income', function () {
     $inactive = Category::factory()->inactive()->create();
     $active = Category::factory()->create();
+    /** @var TestCase $this */
     foreach ([null, $inactive->id, 999999, 'bad'] as $id) {
         authHttp('POST', '/api/v1/transactions', transactionData(['type' => 'expense', 'category_id' => $id]), $this->bearer)->assertUnprocessable()->assertJsonValidationErrors('category_id');
     }
@@ -158,6 +170,7 @@ it('requires an active category for new expenses and no category for income', fu
 });
 
 it('validates the final state across type and category transitions', function () {
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->for($this->owner)->create();
     $category = Category::factory()->create();
     $inactive = Category::factory()->inactive()->create();
@@ -174,6 +187,7 @@ it('validates the final state across type and category transitions', function ()
 });
 
 it('keeps inactive historical categories without permitting their reassignment', function () {
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->expense()->for($this->owner)->create();
     $category = $transaction->category;
     $category->update(['is_active' => false]);
@@ -189,6 +203,7 @@ it('keeps inactive historical categories without permitting their reassignment',
 });
 
 it('loads all categories with one query for a page', function () {
+    /** @var TestCase $this */
     Transaction::factory()->expense()->count(20)->for($this->owner)->create();
     DB::enableQueryLog();
     authHttp('GET', '/api/v1/transactions', token: $this->bearer)->assertOk()->assertJsonCount(20, 'data');

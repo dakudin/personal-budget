@@ -5,7 +5,7 @@ use Dedoc\Scramble\Generator;
 it('documents authentication endpoints and their security requirements', function () {
     $document = app(Generator::class)();
 
-    expect($document['paths'])->toHaveCount(10)
+    expect($document['paths'])->toHaveCount(12)
         ->and($document['components']['securitySchemes']['bearerAuth'])->toMatchArray(['type' => 'http', 'scheme' => 'bearer'])
         ->and($document['security'])->toBe([['bearerAuth' => []]]);
 
@@ -65,4 +65,26 @@ it('documents financial endpoints filters resources and errors', function () {
         ->and($schemas['TransactionResource']['properties']['occurred_on']['format'])->toBe('date')
         ->and($schemas['TransactionResource']['properties'])->toHaveKeys(['amount_minor', 'category'])
         ->and($schemas['CategoryResource']['properties'])->toHaveKeys(['id', 'name', 'is_active']);
+});
+
+it('documents budgets permissions month examples replacement and summary schemas', function () {
+    $document = app(Generator::class)();
+    foreach ([['/v1/budgets/{month}', 'get'], ['/v1/budgets/{month}', 'put'], ['/v1/budgets/{month}/summary', 'get']] as [$path, $method]) {
+        $operation = $document['paths'][$path][$method];
+        expect($operation['tags'])->toBe(['Бюджети'])
+            ->and($operation['responses'])->toHaveKeys([200, 401, 403, 422])
+            ->and($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]]);
+        $month = collect($operation['parameters'])->firstWhere('name', 'month');
+        expect($month)->toMatchArray(['in' => 'path', 'required' => true, 'example' => '2026-11'])
+            ->and($month['schema']['type'])->toBe('string');
+    }
+    expect($document['paths']['/v1/budgets/{month}']['put']['responses'])->toHaveKey(201)
+        ->and($document['paths']['/v1/budgets/{month}']['get']['responses'])->toHaveKey(404);
+    $schemas = $document['components']['schemas'];
+    expect($schemas['SaveBudgetRequest']['required'])->toContain('items')
+        ->and($schemas['SaveBudgetRequest']['properties']['items']['type'])->toBe('array')
+        ->and($schemas['SaveBudgetRequest']['properties']['items']['items']['properties']['amount_minor'])->toMatchArray(['type' => 'integer', 'minimum' => 0, 'maximum' => 999999999999])
+        ->and($schemas['BudgetResource']['properties']['currency']['const'])->toBe('UAH')
+        ->and($schemas['BudgetSummaryResource']['properties'])->toHaveKeys(['has_budget', 'planned_total_minor', 'spent_total_minor', 'remaining_total_minor', 'overspent_total_minor', 'unplanned_spent_minor', 'income_total_minor', 'net_total_minor', 'items'])
+        ->and($schemas['BudgetSummaryItemResource']['properties'])->toHaveKeys(['category', 'is_planned', 'planned_minor', 'spent_minor', 'remaining_minor', 'overspent_minor', 'used_percent']);
 });

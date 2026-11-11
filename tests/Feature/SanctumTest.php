@@ -2,9 +2,10 @@
 
 use App\Models\User;
 use Laravel\Sanctum\PersonalAccessToken;
+use Tests\TestCase;
 
 it('stores and resolves a Sanctum token', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $user = User::factory()->create();
     $token = $user->createToken('foundation-check', ['read']);
 

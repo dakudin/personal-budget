@@ -1,6 +1,7 @@
 <?php
 
 use App\Filament\Resources\Categories\Pages\ManageCategories;
+use App\Models\BudgetItem;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
@@ -14,9 +15,10 @@ use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Tests\TestCase;
 
 beforeEach(function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->seed(RoleSeeder::class);
     Filament::setCurrentPanel(Filament::getPanel('admin'));
     $this->admin = User::factory()->create()->assignRole('admin');
@@ -24,7 +26,7 @@ beforeEach(function () {
 });
 
 it('creates edits deactivates reactivates and deletes unused categories in Filament', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     Livewire::test(ManageCategories::class)
         ->callAction('create', data: ['name' => 'Нова категорія', 'is_active' => true])
         ->assertHasNoFormErrors();
@@ -60,7 +62,7 @@ it('validates names and uniqueness in Filament', function (string $name) {
 })->with(['', 'Продукти', str_repeat('x', 101)]);
 
 it('explains why used categories cannot be deleted and allows deactivation', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->expense()->create();
     $category = $transaction->category;
     expect(Gate::inspect('delete', $category)->denied())->toBeTrue()
@@ -75,14 +77,32 @@ it('explains why used categories cannot be deleted and allows deactivation', fun
 });
 
 it('restricts deletion of referenced categories at the database level', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $transaction = Transaction::factory()->expense()->create();
     expect(fn () => DB::table('categories')->where('id', $transaction->category_id)->delete())->toThrow(QueryException::class);
     $this->assertModelExists($transaction->category);
 });
 
+it('protects categories referenced only by budgets while allowing deactivation', function () {
+    $item = BudgetItem::factory()->create();
+    $category = $item->category;
+    expect($category->transactions()->exists())->toBeFalse()
+        ->and($category->isUsed())->toBeTrue()
+        ->and(Gate::inspect('delete', $category)->denied())->toBeTrue()
+        ->and(Gate::inspect('delete', $category)->message())->toContain('бюджетах');
+    Livewire::test(ManageCategories::class)->assertSee('Замість видалення деактивуйте')
+        ->assertActionDisabled(TestAction::make('delete')->table($category))
+        ->callAction(TestAction::make('delete')->table($category));
+    /** @var TestCase $this */
+    $this->assertModelExists($category);
+    expect(fn () => DB::table('categories')->where('id', $category->id)->delete())->toThrow(QueryException::class);
+    Livewire::test(ManageCategories::class)->callAction(TestAction::make('deactivate')->table($category));
+    expect($category->fresh()->is_active)->toBeFalse()
+        ->and($item->fresh()->category->name)->toBe($category->name);
+});
+
 it('denies category actions invoked directly without manage permission', function (string $action) {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->admin->roles()->first()->revokePermissionTo('categories.manage');
     $category = Category::factory()->create(['is_active' => $action !== 'activate']);
     $component = Livewire::test(ManageCategories::class);
@@ -96,14 +116,14 @@ it('denies category actions invoked directly without manage permission', functio
 })->with(['create', 'edit', 'activate', 'deactivate', 'delete']);
 
 it('rejects access to the resource without categories view permission', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->admin->roles()->first()->revokePermissionTo('categories.view');
     $this->get('/admin/categories')->assertForbidden();
     Livewire::test(ManageCategories::class)->assertForbidden();
 });
 
 it('does not allow a regular user to manage categories', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $user = User::factory()->create()->assignRole('user');
     $category = Category::factory()->create();
     expect(Gate::forUser($user)->allows('viewAny', Category::class))->toBeTrue();
@@ -114,7 +134,7 @@ it('does not allow a regular user to manage categories', function () {
 });
 
 it('seeds categories and permissions idempotently preserving administrative choices', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->seed();
     $category = Category::where('name', 'Продукти')->sole();
     $category->update(['is_active' => false]);
@@ -125,7 +145,7 @@ it('seeds categories and permissions idempotently preserving administrative choi
     $this->seed(CategorySeeder::class);
     $this->assertDatabaseCount('categories', 6);
     $this->assertDatabaseCount('roles', 2);
-    $this->assertDatabaseCount('permissions', 7);
+    $this->assertDatabaseCount('permissions', 9);
     expect($category->fresh()->is_active)->toBeFalse()
         ->and($this->admin->fresh()->hasDirectPermission('custom.permission'))->toBeTrue()
         ->and(Role::findByName('admin', 'web')->hasPermissionTo('custom.permission'))->toBeTrue()

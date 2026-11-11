@@ -34,8 +34,8 @@ class CategoryPolicy
             return Response::deny();
         }
 
-        return $category->transactions()->exists()
-            ? Response::deny('Категорія використовується в операціях. Деактивуйте її, щоб зберегти історію.')
+        return $category->isUsed()
+            ? Response::deny('Категорія використовується в операціях або бюджетах. Деактивуйте її, щоб зберегти історію.')
             : Response::allow();
     }
 }

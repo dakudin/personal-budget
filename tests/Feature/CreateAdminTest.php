@@ -2,9 +2,10 @@
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
 
 it('creates an administrator with a hashed password', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->artisan('app:create-admin', ['--name' => 'Admin', '--email' => 'admin@example.com'])
         ->expectsQuestion('Пароль (щонайменше 12 символів)', 'secure-test-password')
         ->assertSuccessful();
@@ -16,7 +17,7 @@ it('creates an administrator with a hashed password', function () {
 });
 
 it('rejects a short password without creating an account', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $this->artisan('app:create-admin', ['--name' => 'Admin', '--email' => 'admin@example.com'])
         ->expectsQuestion('Пароль (щонайменше 12 символів)', 'short')
         ->assertFailed();
@@ -25,7 +26,7 @@ it('rejects a short password without creating an account', function () {
 });
 
 it('does not elevate an existing user', function () {
-    /** @var \Tests\TestCase $this */
+    /** @var TestCase $this */
     $user = User::factory()->create();
 
     $this->artisan('app:create-admin', ['--name' => 'Admin', '--email' => $user->email])
