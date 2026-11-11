@@ -282,6 +282,12 @@ it('uses indexed half open month ranges including year boundaries and leap days'
     ['2028-02', '2028-02-01', '2028-02-29', '2028-01-31', '2028-03-01'],
 ]);
 
+it('supports the earliest documented budget month', function () {
+    /** @var TestCase $this */
+    authHttp('GET', '/api/v1/budgets/2026-01/summary', token: $this->bearer)
+        ->assertOk()->assertJsonPath('data.month', '2026-01')->assertJsonPath('data.has_budget', false);
+});
+
 it('supports the final MySQL calendar month', function () {
     /** @var TestCase $this */
     budgetPut([], month: '9999-12')->assertCreated();

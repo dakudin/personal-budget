@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Transaction;
+use App\Rules\BcryptPassword;
 use App\Support\Email;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
@@ -31,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Route::bind('transaction', fn (string $value): Transaction => request()->user()->transactions()->findOrFail($value));
 
-        Password::defaults(fn () => Password::min(12));
+        Password::defaults(fn () => Password::min(12)->rules([new BcryptPassword]));
 
         Scramble::configure()->withDocumentTransformers(function (OpenApi $document): void {
             $document->secure(SecurityScheme::http('bearer')->as('bearerAuth'));
