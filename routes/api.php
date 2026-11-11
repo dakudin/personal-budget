@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,9 @@ Route::prefix('v1')->group(function (): void {
         Route::put('password', 'changePassword')->middleware(['auth:sanctum', 'throttle:auth-recovery']);
     });
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('budgets/{month}', [BudgetController::class, 'show']);
+        Route::put('budgets/{month}', [BudgetController::class, 'update']);
+        Route::get('budgets/{month}/summary', [BudgetController::class, 'summary']);
         Route::get('categories', [CategoryController::class, 'index']);
         Route::apiResource('transactions', TransactionController::class)->except('update');
         Route::patch('transactions/{transaction}', [TransactionController::class, 'update']);

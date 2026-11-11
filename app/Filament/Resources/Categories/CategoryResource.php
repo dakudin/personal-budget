@@ -21,7 +21,7 @@ class CategoryResource extends Resource
 {
     protected static ?string $model = Category::class;
 
-    protected static ?string $modelLabel = 'категорія';
+    protected static ?string $modelLabel = 'категорію';
 
     protected static ?string $pluralModelLabel = 'Категорії витрат';
 
@@ -42,7 +42,7 @@ class CategoryResource extends Resource
                 TextColumn::make('name')->label('Назва')->searchable()->sortable(),
                 IconColumn::make('is_active')->label('Активна')->boolean(),
                 TextColumn::make('transactions_count')->counts('transactions')->label('Операцій')
-                    ->description(fn (Category $record): ?string => $record->transactions_count > 0
+                    ->description(fn (Category $record): ?string => $record->isUsed()
                         ? 'Використовується. Замість видалення деактивуйте категорію.' : null),
             ])
             ->filters([TernaryFilter::make('is_active')->label('Активність')->trueLabel('Активні')->falseLabel('Неактивні')])

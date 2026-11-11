@@ -18,10 +18,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
-#[Group('Операції')]
+#[Group('Транзакції')]
 class TransactionController extends Controller
 {
-    #[Endpoint(title: 'Власні операції', description: 'Лише власні записи, також для admin. Межі дат включні; date_to >= date_from. Порядок occurred_on DESC, id DESC. per_page: 20, максимум 100. Потрібен transactions.view.')]
+    #[Endpoint(title: 'Список транзакцій', description: 'Получити власні транзакції. Межі дат включні; date_to >= date_from. Порядок occurred_on DESC, id DESC. per_page: 20, максимум 100. Потрібен transactions.view дозвіл.')]
     #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
     public function index(IndexTransactionRequest $request): AnonymousResourceCollection
     {
@@ -46,7 +46,7 @@ class TransactionController extends Controller
             ->paginate($filters['per_page'] ?? 20)->withQueryString());
     }
 
-    #[Endpoint(title: 'Створення операції', description: 'amount_minor: ціле JSON-число 1–999999999999 копійок, валюта UAH. occurred_on: YYYY-MM-DD. Витрата потребує активної категорії, дохід — category_id=null. user_id ігнорується. Потрібен transactions.create.')]
+    #[Endpoint(title: 'Створення транзакції', description: 'amount_minor: ціле JSON-число 1–999999999999 копійок, валюта UAH. occurred_on: YYYY-MM-DD. Витрата потребує активної категорії, дохід — category_id=null. user_id ігнорується. Потрібен transactions.create дозвіл.')]
     #[ApiResponse(201, type: TransactionResource::class)]
     #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
     public function store(StoreTransactionRequest $request): JsonResponse
@@ -56,7 +56,7 @@ class TransactionController extends Controller
         return (new TransactionResource($transaction->load('category')))->response()->setStatusCode(201);
     }
 
-    #[Endpoint(title: 'Перегляд операції', description: 'Чужа або відсутня операція повертає 404. Потрібен transactions.view.')]
+    #[Endpoint(title: 'Перегляд транзакції', description: 'Чужа або відсутня транзакція повертає 404. Потрібен transactions.view дозвіл.')]
     #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
     public function show(Request $request, Transaction $transaction): TransactionResource
     {
@@ -65,7 +65,7 @@ class TransactionController extends Controller
         return new TransactionResource($transaction->load('category'));
     }
 
-    #[Endpoint(title: 'Редагування операції', description: 'Перевіряється кінцевий стан. income → expense потребує активної категорії; expense → income очищає категорію. Стару неактивну категорію витрати можна зберегти. user_id ігнорується. Потрібен transactions.update.')]
+    #[Endpoint(title: 'Редагування транзакції', description: 'Перевіряється кінцевий стан. income → expense потребує активної категорії; expense → income очищає категорію. Стару неактивну категорію витрати можна зберегти. user_id ігнорується. Потрібен transactions.update дозвіл.')]
     #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
     public function update(UpdateTransactionRequest $request, Transaction $transaction): TransactionResource
     {
@@ -80,7 +80,7 @@ class TransactionController extends Controller
         return new TransactionResource($transaction->load('category'));
     }
 
-    #[Endpoint(title: 'Видалення операції', description: 'Чужа або відсутня операція повертає 404. Потрібен transactions.delete.')]
+    #[Endpoint(title: 'Видалення транзакції', description: 'Чужа або відсутня транзакція повертає 404. Потрібен transactions.delete дозвіл.')]
     #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
     public function destroy(Request $request, Transaction $transaction): Response
     {
