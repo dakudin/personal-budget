@@ -2,10 +2,42 @@
 
 use Dedoc\Scramble\Generator;
 
+function documentedResponse(array $response, array $document): array
+{
+    if (isset($response['$ref'])) {
+        $target = $document;
+        foreach (explode('/', substr($response['$ref'], 2)) as $key) {
+            $target = $target[$key];
+        }
+
+        return documentedResponse($target, $document);
+    }
+
+    return $response;
+}
+
+it('describes the JSON body of every documented client error', function () {
+    $document = app(Generator::class)();
+    foreach ($document['paths'] as $path) {
+        foreach ($path as $operation) {
+            foreach ($operation['responses'] as $status => $response) {
+                if ($status < 400 || $status >= 500) {
+                    continue;
+                }
+                $schema = documentedResponse($response, $document)['content']['application/json']['schema'];
+                expect($schema['required'])->toContain('message');
+                if ($status === 422) {
+                    expect($schema['required'])->toContain('errors');
+                }
+            }
+        }
+    }
+});
+
 it('documents authentication endpoints and their security requirements', function () {
     $document = app(Generator::class)();
 
-    expect($document['paths'])->toHaveCount(12)
+    expect($document['paths'])->toHaveCount(14)
         ->and($document['components']['securitySchemes']['bearerAuth'])->toMatchArray(['type' => 'http', 'scheme' => 'bearer'])
         ->and($document['security'])->toBe([['bearerAuth' => []]]);
 
@@ -36,6 +68,23 @@ it('documents authentication endpoints and their security requirements', functio
         ->and($schemas['UserResource']['properties'])->not->toHaveKeys(['password', 'remember_token']);
 });
 
+it('documents public code verification and authenticated status and resend', function () {
+    $document = app(Generator::class)();
+    foreach (['/v1/auth/email/verify' => 'get', '/v1/auth/email/verification-notification' => 'post'] as $path => $method) {
+        $operation = $document['paths'][$path][$method];
+        expect($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]])
+            ->and($operation['responses'])->toHaveKeys([200, 401]);
+    }
+
+    $verify = $document['paths']['/v1/auth/email/verify']['post'];
+    expect($verify['security'])->toBe([])
+        ->and($verify['responses'])->toHaveKeys([200, 422, 429])->not->toHaveKeys([401, 403])
+        ->and($document['paths'])->not->toHaveKey('/v1/auth/email/verify/{id}/{hash}')
+        ->and($document['components']['schemas']['VerifyEmailCodeRequest']['required'])->toContain('email', 'code')
+        ->and($document['components']['schemas']['VerifyEmailCodeRequest']['properties']['code']['type'])->toBe('string')
+        ->and($document['paths']['/v1/auth/email/verification-notification']['post']['responses'])->toHaveKeys([202, 429]);
+});
+
 it('documents financial endpoints filters resources and errors', function () {
     $document = app(Generator::class)();
     $paths = $document['paths'];
@@ -51,7 +100,8 @@ it('documents financial endpoints filters resources and errors', function () {
         expect($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]])
             ->and($operation['responses'])->toHaveKeys([$status, 401, 403]);
         if (str_contains($path, '{transaction}')) {
-            expect($operation['responses'])->toHaveKey(404);
+            expect($operation['responses'])->toHaveKey(404)
+                ->and(documentedResponse($operation['responses'][404], $document)['content']['application/json']['schema']['required'])->toContain('message');
         }
         if (! in_array($method, ['get', 'delete']) || ! str_contains($path, '{transaction}')) {
             expect($operation['responses'])->toHaveKey(422);
@@ -76,7 +126,8 @@ it('documents budgets permissions month examples replacement and summary schemas
             ->and($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]]);
         $month = collect($operation['parameters'])->firstWhere('name', 'month');
         expect($month)->toMatchArray(['in' => 'path', 'required' => true, 'example' => '2026-11'])
-            ->and($month['schema']['type'])->toBe('string');
+            ->and($month['schema']['type'])->toBe('string')
+            ->and($month['description'])->toContain('2026–9999');
     }
     expect($document['paths']['/v1/budgets/{month}']['put']['responses'])->toHaveKey(201)
         ->and($document['paths']['/v1/budgets/{month}']['get']['responses'])->toHaveKey(404);

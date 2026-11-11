@@ -35,6 +35,7 @@ class BudgetSummaryItemResource extends JsonResource
             'overspent_minor' => (int) $this->resource['overspent_minor'],
             /**
              * Відсоток виконання.
+             *
              * @var float|null
              */
             'used_percent' => $this->resource['used_percent'],

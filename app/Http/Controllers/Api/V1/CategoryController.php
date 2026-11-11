@@ -15,7 +15,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class CategoryController extends Controller
 {
     #[Endpoint(title: 'Категорії витрат', description: 'Спільний довідник. Типово лише активні; include_inactive=true або 1 додає неактивні. Потрібен дозвіл categories.view.')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function index(IndexCategoryRequest $request): AnonymousResourceCollection
     {
         return CategoryResource::collection(Category::query()

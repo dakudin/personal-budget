@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Password;
 class AuthController extends Controller
 {
     /** @unauthenticated */
-    #[Endpoint(title: 'Реєстрація', description: 'Створює користувача з роллю user і видає Bearer-токен. Email нормалізується; службові поля ігноруються. Пароль має містити щонайменше 12 символів, password_confirmation має збігатися з password.')]
+    #[Endpoint(title: 'Реєстрація', description: 'Створює користувача з роллю user, непідтвердженим email і видає Bearer-токен. Після commit ставить лист підтвердження в зашифровану Redis-чергу mail. До підтвердження доступні службові endpoint’и, фінансові повертають 403. Email нормалізується; службові поля ігноруються. Пароль: щонайменше 12 символів, не більше 72 байтів UTF-8, без NUL; password_confirmation має збігатися з password.')]
     #[ApiResponse(201, type: AuthTokenResource::class)]
     #[ApiResponse(429, description: 'Перевищено 5 запитів за хвилину з IP. Заголовок Retry-After містить час очікування в секундах.', type: 'array{message: string}')]
     public function register(RegisterRequest $request, RegisterUser $action): JsonResponse
@@ -36,7 +36,7 @@ class AuthController extends Controller
     }
 
     /** @unauthenticated */
-    #[Endpoint(title: 'Вхід', description: 'Видає токен на 24 години за замовчуванням. Невідомий email і неправильний пароль мають однакову відповідь 401.')]
+    #[Endpoint(title: 'Вхід', description: 'Видає токен на 24 години за замовчуванням. Невідомий email і неправильний пароль мають однакову відповідь 401. Пароль понад 72 байти UTF-8 або з NUL дає 422.')]
     #[ApiResponse(401, description: 'Невірний email або пароль.', type: 'array{message: string}')]
     #[ApiResponse(429, description: '5 запитів за хвилину для email та IP; 30 за хвилину для IP. Retry-After — секунди до наступної спроби.', type: 'array{message: string}')]
     public function login(LoginRequest $request, LoginUser $action): AuthTokenResource
@@ -52,14 +52,14 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
-    #[Endpoint(title: 'Поточний користувач', description: 'Потрібен дійсний Bearer-токен Sanctum; cookie сесії не авторизує API.')]
+    #[Endpoint(title: 'Поточний користувач', description: 'Потрібен дійсний Bearer-токен.')]
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user());
     }
 
     /** @unauthenticated */
-    #[Endpoint(title: 'Запит відновлення пароля', description: 'Доступний без Bearer-токена. Для валідного email повертає нейтральну відповідь 202 незалежно від наявності акаунта. Reset-токен надходить лише в тексті листа разом зі строком дії з конфігурації password broker; відповідь API його не містить. Лист надсилається через SMTP; локально — Mailpit. Повторний лист: не частіше разу на 60 секунд за замовчуванням.')]
+    #[Endpoint(title: 'Запит відновлення пароля', description: 'Доступний без Bearer-токена. Для валідного email повертає нейтральну відповідь 202 незалежно від наявності акаунта. Reset-токен надходить лише в тексті листа разом зі строком дії з конфігурації password broker; відповідь API його не містить. Лист надсилає воркер Redis-черги mail через SMTP; локально — Mailpit. Повторний лист: не частіше разу на 60 секунд за замовчуванням.')]
     #[ApiResponse(429, description: 'Спільний ліміт відновлення: 5 запитів за хвилину з IP. Retry-After — секунди очікування.', type: 'array{message: string}')]
     public function forgotPassword(EmailRequest $request): JsonResponse
     {
@@ -69,7 +69,7 @@ class AuthController extends Controller
     }
 
     /** @unauthenticated */
-    #[Endpoint(title: 'Скидання пароля', description: 'Доступний без Bearer-токена. Передайте email і скопійований із тексту листа token; строк його дії задає password broker (60 хвилин за замовчуванням). Новий password: щонайменше 12 символів; password_confirmation має збігатися з password. Успіх — 204 без тіла відповіді. Токен одноразовий; усі API-токени та попередні сесії користувача відкликаються.')]
+    #[Endpoint(title: 'Скидання пароля', description: 'Доступний без Bearer-токена. Передайте email і скопійований із тексту листа token; строк його дії задає password broker (60 хвилин за замовчуванням). Новий password: щонайменше 12 символів, не більше 72 байтів UTF-8, без NUL; password_confirmation має збігатися з password. Успіх — 204 без тіла відповіді. Токен одноразовий; усі API-токени та попередні сесії користувача відкликаються.')]
     #[ApiResponse(422, description: 'Помилки валідації або недійсний, прострочений чи вже використаний токен.', type: 'array{message: string, errors: array<string, string[]>}')]
     #[ApiResponse(429, description: 'Спільний ліміт відновлення: 5 запитів за хвилину з IP. Retry-After — секунди очікування.', type: 'array{message: string}')]
     public function resetPassword(ResetPasswordRequest $request, ResetPassword $action): Response
@@ -79,7 +79,7 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
-    #[Endpoint(title: 'Зміна пароля', description: 'Вимагає правильного current_password і нового пароля щонайменше з 12 символів із підтвердженням. Відкликає всі API-токени, включно з поточним, та попередні сесії. Потрібно ввійти повторно.')]
+    #[Endpoint(title: 'Зміна пароля', description: 'Вимагає правильного current_password і нового пароля щонайменше з 12 символів із підтвердженням. Обидва паролі: не більше 72 байтів UTF-8, без NUL. Відкликає всі API-токени, включно з поточним, та попередні сесії. Потрібно ввійти повторно.')]
     #[ApiResponse(422, description: 'Неправильний поточний пароль або помилки валідації.', type: 'array{message: string, errors: array<string, string[]>}')]
     #[ApiResponse(429, description: 'Спільний ліміт відновлення: 5 запитів за хвилину з IP. Retry-After — секунди очікування.', type: 'array{message: string}')]
     public function changePassword(ChangePasswordRequest $request, ChangePassword $action): Response

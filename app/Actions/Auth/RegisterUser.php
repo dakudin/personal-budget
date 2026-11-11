@@ -3,6 +3,7 @@
 namespace App\Actions\Auth;
 
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\NewAccessToken;
 
@@ -18,7 +19,11 @@ class RegisterUser
             ]);
             $user->assignRole('user');
 
-            return app(IssueApiToken::class)->handle($user);
+            $token = app(IssueApiToken::class)->handle($user);
+
+            event(new Registered($user));
+
+            return $token;
         });
     }
 }

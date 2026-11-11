@@ -2,15 +2,23 @@
 
 namespace App\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ResetPasswordToken extends Notification
+class ResetPasswordToken extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
+    use Queueable;
+
     public function __construct(
         #[\SensitiveParameter] public readonly string $token,
         public readonly int $expiresInMinutes,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
