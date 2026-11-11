@@ -21,7 +21,7 @@ class BudgetController extends Controller
 {
     #[Endpoint(title: 'Місячний бюджет', description: 'Получити власний бюджет. Повертає як активні так і неактивні історичні категорії. Потрібен budgets.view дозвіл.')]
     #[PathParameter('month', description: 'Календарний місяць YYYY-MM (2026–9999).', type: 'string', example: '2026-11')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     #[ApiResponse(404, description: 'Власний бюджет відсутній.', type: 'array{message: string}')]
     #[ApiResponse(422, description: 'Некоректний місяць.', type: 'array{message: string, errors: array<string, string[]>}')]
     public function show(BudgetMonthRequest $request): BudgetResource
@@ -37,7 +37,7 @@ class BudgetController extends Controller
     #[PathParameter('month', description: 'Календарний місяць YYYY-MM (2026–9999).', type: 'string', example: '2026-11')]
     #[ApiResponse(200, type: BudgetResource::class)]
     #[ApiResponse(201, type: BudgetResource::class)]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     #[ApiResponse(422, description: 'Некоректний місяць, сума, список або категорія.', type: 'array{message: string, errors: array<string, string[]>}')]
     public function update(SaveBudgetRequest $request, SaveBudget $save): JsonResponse
     {
@@ -48,7 +48,7 @@ class BudgetController extends Controller
 
     #[Endpoint(title: 'План-факт місяця', description: 'Без бюджету: код 200, has_budget=false, план=0. Об’єднання категорій плану й витрат, включно з неактивними. Факт за occurred_on: [початок місяця, початок наступного). remaining=planned−spent; overspent=max(spent−planned,0); used_percent=round(spent/planned*100,2), null за плану 0. Загальна перевитрата із загальних сум. Доходи окремо; net=income−spent; unplanned — витрати категорій поза планом. Потрібен budgets.view дозвіл.')]
     #[PathParameter('month', description: 'Календарний місяць YYYY-MM (2026–9999).', type: 'string', example: '2026-11')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     #[ApiResponse(422, description: 'Некоректний місяць.', type: 'array{message: string, errors: array<string, string[]>}')]
     public function summary(BudgetMonthRequest $request, CalculateBudgetSummary $summary): BudgetSummaryResource
     {

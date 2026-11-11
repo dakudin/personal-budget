@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Password;
 class AuthController extends Controller
 {
     /** @unauthenticated */
-    #[Endpoint(title: 'Реєстрація', description: 'Створює користувача з роллю user і видає Bearer-токен. Email нормалізується; службові поля ігноруються. Пароль має містити щонайменше 12 символів, password_confirmation має збігатися з password.')]
+    #[Endpoint(title: 'Реєстрація', description: 'Створює користувача з роллю user, непідтвердженим email і видає Bearer-токен. Після commit ставить лист підтвердження в зашифровану Redis-чергу mail. До підтвердження доступні службові endpoint’и, фінансові повертають 403. Email нормалізується; службові поля ігноруються. Пароль має містити щонайменше 12 символів, password_confirmation має збігатися з password.')]
     #[ApiResponse(201, type: AuthTokenResource::class)]
     #[ApiResponse(429, description: 'Перевищено 5 запитів за хвилину з IP. Заголовок Retry-After містить час очікування в секундах.', type: 'array{message: string}')]
     public function register(RegisterRequest $request, RegisterUser $action): JsonResponse
@@ -52,7 +52,7 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
-    #[Endpoint(title: 'Поточний користувач', description: 'Потрібен дійсний Bearer-токен Sanctum; cookie сесії не авторизує API.')]
+    #[Endpoint(title: 'Поточний користувач', description: 'Потрібен дійсний Bearer-токен.')]
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user());

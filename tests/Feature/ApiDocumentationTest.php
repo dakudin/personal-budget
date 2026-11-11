@@ -5,7 +5,7 @@ use Dedoc\Scramble\Generator;
 it('documents authentication endpoints and their security requirements', function () {
     $document = app(Generator::class)();
 
-    expect($document['paths'])->toHaveCount(12)
+    expect($document['paths'])->toHaveCount(14)
         ->and($document['components']['securitySchemes']['bearerAuth'])->toMatchArray(['type' => 'http', 'scheme' => 'bearer'])
         ->and($document['security'])->toBe([['bearerAuth' => []]]);
 
@@ -34,6 +34,23 @@ it('documents authentication endpoints and their security requirements', functio
         ->and($schemas['ChangePasswordRequest']['required'])->toContain('current_password', 'password', 'password_confirmation')
         ->and($schemas['AuthTokenResource']['required'])->toContain('user', 'token', 'token_type', 'expires_at')
         ->and($schemas['UserResource']['properties'])->not->toHaveKeys(['password', 'remember_token']);
+});
+
+it('documents public code verification and authenticated status and resend', function () {
+    $document = app(Generator::class)();
+    foreach (['/v1/auth/email/verify' => 'get', '/v1/auth/email/verification-notification' => 'post'] as $path => $method) {
+        $operation = $document['paths'][$path][$method];
+        expect($operation['security'] ?? $document['security'])->toBe([['bearerAuth' => []]])
+            ->and($operation['responses'])->toHaveKeys([200, 401]);
+    }
+
+    $verify = $document['paths']['/v1/auth/email/verify']['post'];
+    expect($verify['security'])->toBe([])
+        ->and($verify['responses'])->toHaveKeys([200, 422, 429])->not->toHaveKeys([401, 403])
+        ->and($document['paths'])->not->toHaveKey('/v1/auth/email/verify/{id}/{hash}')
+        ->and($document['components']['schemas']['VerifyEmailCodeRequest']['required'])->toContain('email', 'code')
+        ->and($document['components']['schemas']['VerifyEmailCodeRequest']['properties']['code']['type'])->toBe('string')
+        ->and($document['paths']['/v1/auth/email/verification-notification']['post']['responses'])->toHaveKeys([202, 429]);
 });
 
 it('documents financial endpoints filters resources and errors', function () {

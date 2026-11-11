@@ -43,5 +43,16 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(5)->by('identity:'.hash('sha256', Email::normalize($request->input('email')).'|'.$request->ip())),
         ]);
         RateLimiter::for('auth-recovery', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
+
+        $verificationThrottleResponse = fn (Request $request, array $headers) => response()->json([
+            'message' => 'Забагато запитів підтвердження email. Спробуйте пізніше.',
+        ], 429, $headers);
+        RateLimiter::for('email-verify', fn (Request $request) => [
+            Limit::perMinute(30)->by('ip:'.$request->ip())->response($verificationThrottleResponse),
+            Limit::perMinute(5)->by('email:'.hash('sha256', Email::normalize($request->input('email'))))->response($verificationThrottleResponse),
+        ]);
+        RateLimiter::for('email-verification-send', fn (Request $request) => $request->user()->hasVerifiedEmail()
+            ? Limit::none()
+            : Limit::perMinute(1)->by((string) $request->user()->getKey())->response($verificationThrottleResponse));
     }
 }

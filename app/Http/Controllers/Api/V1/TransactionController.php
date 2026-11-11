@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Gate;
 class TransactionController extends Controller
 {
     #[Endpoint(title: 'Список транзакцій', description: 'Получити власні транзакції. Межі дат включні; date_to >= date_from. Порядок occurred_on DESC, id DESC. per_page: 20, максимум 100. Потрібен transactions.view дозвіл.')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function index(IndexTransactionRequest $request): AnonymousResourceCollection
     {
         $filters = $request->validated();
@@ -48,7 +48,7 @@ class TransactionController extends Controller
 
     #[Endpoint(title: 'Створення транзакції', description: 'amount_minor: ціле JSON-число 1–999999999999 копійок, валюта UAH. occurred_on: YYYY-MM-DD. Витрата потребує активної категорії, дохід — category_id=null. user_id ігнорується. Потрібен transactions.create дозвіл.')]
     #[ApiResponse(201, type: TransactionResource::class)]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function store(StoreTransactionRequest $request): JsonResponse
     {
         $transaction = $request->user()->transactions()->create($request->validated());
@@ -57,7 +57,7 @@ class TransactionController extends Controller
     }
 
     #[Endpoint(title: 'Перегляд транзакції', description: 'Чужа або відсутня транзакція повертає 404. Потрібен transactions.view дозвіл.')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function show(Request $request, Transaction $transaction): TransactionResource
     {
         Gate::authorize('view', $transaction);
@@ -66,7 +66,7 @@ class TransactionController extends Controller
     }
 
     #[Endpoint(title: 'Редагування транзакції', description: 'Перевіряється кінцевий стан. income → expense потребує активної категорії; expense → income очищає категорію. Стару неактивну категорію витрати можна зберегти. user_id ігнорується. Потрібен transactions.update дозвіл.')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function update(UpdateTransactionRequest $request, Transaction $transaction): TransactionResource
     {
         $data = $request->validated();
@@ -81,7 +81,7 @@ class TransactionController extends Controller
     }
 
     #[Endpoint(title: 'Видалення транзакції', description: 'Чужа або відсутня транзакція повертає 404. Потрібен transactions.delete дозвіл.')]
-    #[ApiResponse(403, description: 'Недостатньо дозволів.', type: 'array{message: string}')]
+    #[ApiResponse(403, description: 'Email не підтверджено або недостатньо дозволів.', type: 'array{message: string}')]
     public function destroy(Request $request, Transaction $transaction): Response
     {
         Gate::authorize('delete', $transaction);
