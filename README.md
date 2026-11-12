@@ -105,8 +105,8 @@ Sail використовує runtime `vendor/laravel/sail/runtimes/8.5`. Sail, 
 
 | Сервіс | Адреса з локального компьютера | Адреса в Docker-мережі |
 | --- | --- | --- |
-| Застосунок | http://localhost | `laravel.test:80` |
-| Filament | http://localhost/admin | — |
+| API Base URL | http://localhost/api | — |
+| Адміністративна панель | http://localhost/admin | — |
 | Перевірка стану | http://localhost/up | — |
 | Mailpit UI | http://localhost:8025 | `mailpit:8025` |
 | SMTP Mailpit | `127.0.0.1:1025` | `mailpit:1025` |
@@ -114,7 +114,6 @@ Sail використовує runtime `vendor/laravel/sail/runtimes/8.5`. Sail, 
 | Redis | Не публікується на хост | `redis:6379` |
 | Scramble UI | http://localhost/docs/api | — |
 | OpenAPI JSON | http://localhost/docs/api.json | — |
-| Vite (лише після `sail npm run dev`) | http://localhost:5173 | `laravel.test:5173` |
 
 Порти опубліковані лише на `127.0.0.1`. Якщо порт зайнятий, змініть `APP_PORT`, `APP_URL`, `FORWARD_DB_PORT`, `FORWARD_MAILPIT_PORT`, `FORWARD_MAILPIT_DASHBOARD_PORT` або `VITE_PORT` у `.env` і повторіть `sail up -d`. `DB_HOST=mysql` та `DB_PORT=3306` усередині мережі залишаються такими самими.
 
@@ -228,8 +227,6 @@ unset TOKEN
 ./vendor/bin/sail artisan config:clear
 ./vendor/bin/sail restart worker
 ```
-
-Старий GET-маршрут із `{id}/{hash}` видалено: підписані посилання більше не діють. Старі verification-завдання залишаються сумісними з десеріалізацією, але пропускаються без надсилання; інші листи та черга не очищаються. Наявні користувачі з непідтвердженим email входять і запитують новий код. Міграція не змінює наявний статус підтвердження.
 
 Ручна перевірка: зареєструйте користувача, збережіть токен із відповіді та відкрийте [Mailpit](http://localhost:8025). У листі «Підтвердження email — Особистий бюджет» скопіюйте код і виконайте запит без авторизації (приклади email і коду замініть власними):
 
