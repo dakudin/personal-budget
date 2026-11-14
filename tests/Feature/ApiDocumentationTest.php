@@ -127,7 +127,7 @@ it('documents budgets permissions month examples replacement and summary schemas
         $month = collect($operation['parameters'])->firstWhere('name', 'month');
         expect($month)->toMatchArray(['in' => 'path', 'required' => true, 'example' => '2026-11'])
             ->and($month['schema']['type'])->toBe('string')
-            ->and($month['description'])->toContain('2026–9999');
+            ->and($month['description'])->toContain('YYYY-MM', 'від 2026-01 до 9999-12 включно');
     }
     expect($document['paths']['/v1/budgets/{month}']['put']['responses'])->toHaveKey(201)
         ->and($document['paths']['/v1/budgets/{month}']['get']['responses'])->toHaveKey(404);

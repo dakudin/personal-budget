@@ -16,9 +16,10 @@ class CalculateBudgetSummary
         return DB::transaction(function () use ($user, $month): Collection {
             $budget = $user->budgets()->where('month', $month)->with('items')->first();
             $plan = $budget?->items->keyBy('category_id') ?? collect();
-            $nextMonth = CarbonImmutable::parse($month)->addMonth()->format('Y-m-d');
             // MySQL DATE ends in 9999; this valid DATETIME bound includes its final day.
-            $upperBound = $month === '9999-12-01' ? '9999-12-31 23:59:59' : $nextMonth;
+            $upperBound = $month === '9999-12-01'
+                ? '9999-12-31 23:59:59'
+                : CarbonImmutable::parse($month)->addMonth()->format('Y-m-d');
             $actual = $user->transactions()->where('occurred_on', '>=', $month)
                 ->where('occurred_on', '<', $upperBound)
                 ->selectRaw('type, category_id, SUM(amount_minor) AS total_minor')

@@ -11,7 +11,7 @@ class BudgetMonthRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         Validator::make(['month' => $this->route('month')], [
-            'month' => ['required', 'string', 'regex:/^[1-9][0-9]{3}-(0[1-9]|1[0-2])$/D'],
+            'month' => ['bail', 'required', 'string', 'regex:/^[1-9][0-9]{3}-(0[1-9]|1[0-2])$/D', 'after_or_equal:2026-01-01'],
         ])->validate();
     }
 

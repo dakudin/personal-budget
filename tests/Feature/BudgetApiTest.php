@@ -72,12 +72,17 @@ it('enforces each budget permission independently', function (string $method, st
 
 it('rejects malformed months consistently', function (string $month) {
     /** @var TestCase $this */
+    BudgetItem::factory()->for(Budget::factory()->for($this->owner)->create(['month' => '2026-01-01']))->create();
+    Transaction::factory()->expense()->for($this->owner)->create(['occurred_on' => '2026-01-01']);
+    $snapshot = fn () => collect(['budgets', 'budget_items', 'transactions'])
+        ->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toArray()])->all();
+    $before = $snapshot();
     foreach ([['GET', ''], ['PUT', ''], ['GET', '/summary']] as [$method, $suffix]) {
         authHttp($method, '/api/v1/budgets/'.$month.$suffix, ['items' => []], $this->bearer)
             ->assertUnprocessable()->assertJsonValidationErrors('month');
+        expect($snapshot())->toEqual($before);
     }
-    $this->assertDatabaseCount('budgets', 0);
-})->with(['2026-1', '2026-00', '2026-13', '2026-02-01', '0000-11', '0999-11', '10000-01', '26-11', 'November', '2026-11x']);
+})->with(['2025-01', '2025-12', '2026-1', '2026-00', '2026-13', '2026-02-01', '0000-11', '0999-11', '10000-01', '26-11', 'November', '2026-11x']);
 
 it('rejects invalid lists and items without mutating the saved plan', function (array $body, string $field) {
     /** @var TestCase $this */
@@ -282,17 +287,67 @@ it('uses indexed half open month ranges including year boundaries and leap days'
     ['2028-02', '2028-02-01', '2028-02-29', '2028-01-31', '2028-03-01'],
 ]);
 
-it('supports the earliest documented budget month', function () {
+it('supports every budget endpoint at the documented month boundaries', function (string $month, string $lastDay, string $before) {
     /** @var TestCase $this */
-    authHttp('GET', '/api/v1/budgets/2026-01/summary', token: $this->bearer)
-        ->assertOk()->assertJsonPath('data.month', '2026-01')->assertJsonPath('data.has_budget', false);
+    $category = Category::factory()->create();
+    foreach ([$before => 1000, $month.'-01' => 20, $lastDay => 30] as $date => $amount) {
+        Transaction::factory()->expense()->for($this->owner)->create([
+            'category_id' => $category->id, 'occurred_on' => $date, 'amount_minor' => $amount,
+        ]);
+        Transaction::factory()->for($this->owner)->create(['occurred_on' => $date, 'amount_minor' => $amount * 2]);
+    }
+    budgetSummary($month)->assertOk()->assertJsonPath('data.month', $month)
+        ->assertJsonPath('data.has_budget', false)->assertJsonPath('data.planned_total_minor', 0)
+        ->assertJsonPath('data.spent_total_minor', 50)->assertJsonPath('data.income_total_minor', 100)
+        ->assertJsonPath('data.unplanned_spent_minor', 50)->assertJsonPath('data.items.0.is_planned', false);
+
+    $items = [['category_id' => $category->id, 'amount_minor' => 100]];
+    budgetPut($items, month: $month)->assertCreated()->assertJsonPath('data.month', $month);
+    authHttp('GET', '/api/v1/budgets/'.$month, token: $this->bearer)
+        ->assertOk()->assertJsonPath('data.month', $month)->assertJsonPath('data.planned_total_minor', 100);
+    budgetPut($items, month: $month)->assertOk()->assertJsonPath('data.month', $month);
+    budgetSummary($month)->assertOk()->assertJsonPath('data.month', $month)
+        ->assertJsonPath('data.has_budget', true)->assertJsonPath('data.planned_total_minor', 100)
+        ->assertJsonPath('data.spent_total_minor', 50)->assertJsonPath('data.income_total_minor', 100)
+        ->assertJsonPath('data.remaining_total_minor', 50)->assertJsonPath('data.items.0.is_planned', true);
+})->with([
+    ['2026-01', '2026-01-31', '2025-12-31'],
+    ['9999-12', '9999-12-31', '9999-11-30'],
+]);
+
+it('bounds the final summary query within the MySQL calendar', function () {
+    /** @var TestCase $this */
+    Transaction::factory()->expense()->for($this->owner)->create(['occurred_on' => '9999-12-31', 'amount_minor' => 50]);
+    DB::enableQueryLog();
+    try {
+        budgetSummary('9999-12')->assertOk()->assertJsonPath('data.spent_total_minor', 50);
+        $queries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'from `transactions`'));
+        expect($queries)->toHaveCount(1);
+        expect($queries->first()['query'])->toContain('`occurred_on` >= ?', '`occurred_on` < ?')
+            ->and($queries->first()['bindings'])->toContain('9999-12-01', '9999-12-31 23:59:59')
+            ->not->toContain('10000-01-01');
+    } finally {
+        DB::disableQueryLog();
+    }
 });
 
-it('supports the final MySQL calendar month', function () {
+it('preserves historical plans and transactions when rejecting months before 2026', function () {
     /** @var TestCase $this */
-    budgetPut([], month: '9999-12')->assertCreated();
-    Transaction::factory()->expense()->for($this->owner)->create(['occurred_on' => '9999-12-31', 'amount_minor' => 50]);
-    budgetSummary('9999-12')->assertOk()->assertJsonPath('data.spent_total_minor', 50);
+    foreach (['2025-01', '2025-12'] as $month) {
+        BudgetItem::factory()->for(Budget::factory()->for($this->owner)->create(['month' => $month.'-01']))->create();
+        Transaction::factory()->expense()->for($this->owner)->create(['occurred_on' => $month.'-31']);
+        Transaction::factory()->for($this->owner)->create(['occurred_on' => $month.'-01']);
+    }
+    $tables = ['budgets', 'budget_items', 'transactions'];
+    $snapshot = fn () => collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toArray()])->all();
+    $before = $snapshot();
+    foreach (['2025-01', '2025-12'] as $month) {
+        foreach ([['GET', ''], ['PUT', ''], ['GET', '/summary']] as [$method, $suffix]) {
+            authHttp($method, '/api/v1/budgets/'.$month.$suffix, ['items' => []], $this->bearer)
+                ->assertUnprocessable()->assertJsonValidationErrors('month');
+        }
+    }
+    expect($snapshot())->toEqual($before);
 });
 
 it('protects budget uniqueness month normalization and item uniqueness in MySQL', function () {
